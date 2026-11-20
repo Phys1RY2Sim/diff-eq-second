@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2階線形微分方程式 ビジュアライザー</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Noto Sans JP -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=STIX+Two+Text:ital,wght@0,500;0,700;1,500;1,700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+        .math-font {
+            font-family: 'STIX Two Text', 'Times New Roman', serif;
+        }
+        /* 分数表示用スタイル */
+        .frac {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            vertical-align: middle;
+            margin: 0 0.15em;
+            line-height: 1.05;
+        }
+        .frac > span:first-child {
+            border-bottom: 1.5px solid currentColor;
+            padding: 0 0.15em 0.08em;
+        }
+        .frac > span:last-child {
+            padding: 0.08em 0.15em 0;
+        }
+        /* スライダーのカスタマイズ */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            border-radius: 9999px;
+            background: #e2e8f0;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4f46e5;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+            transition: transform 0.12s ease, background-color 0.12s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            background: #4338ca;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4f46e5;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+        }
+        canvas {
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- ヘッダー -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold math-font text-lg shadow-sm">
+                    ẍ
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                        2階線形微分方程式 ビジュアライザー
+                    </h1>
+                    <p class="text-xs text-slate-500">
+                        係数の変化による運動（位置・速度）と解の分類を確かめる（各端末で独立動作）
+                    </p>
+                </div>
+            </div>
+            <!-- 現在の方程式リアルタイム表示 -->
+            <div id="equation-display" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-1.5 text-base sm:text-lg math-font text-slate-800 flex items-center justify-center self-start sm:self-auto shadow-inner">
+                <!-- JSで動的にレンダリング -->
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+            <!-- 左カラム: コントロールパネル & 自動判定カード -->
+            <section class="lg:col-span-4 space-y-4">
+
+                <!-- 解の自動判定カード（数式は非表示） -->
+                <div id="classification-card" class="bg-white rounded-2xl border-2 border-indigo-200 p-4 shadow-sm transition-colors duration-200">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">特性方程式の解の判定</span>
+                        <span id="discriminant-sign" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 math-font">
+                            D &lt; 0
+                        </span>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div id="class-badge" class="shrink-0 w-10 h-10 rounded-xl bg-indigo-600 text-white font-bold text-lg flex items-center justify-center shadow-sm">
+                            (b)
+                        </div>
+                        <div class="min-w-0">
+                            <h2 id="class-title" class="text-lg font-bold text-slate-900 leading-snug">
+                                共役複素数解
+                            </h2>
+                            <p id="class-physical" class="text-sm font-medium text-indigo-700 mt-0.5">
+                                物理的挙動：減衰振動
+                            </p>
+                        </div>
+                    </div>
+                    <p id="class-hint" class="text-xs text-slate-600 mt-3 pt-2.5 border-t border-slate-100 leading-relaxed">
+                        振動しながら振幅が徐々に小さくなります。係数 b を増やすとどう変化するか確認してみましょう。
+                    </p>
+                </div>
+
+                <!-- 係数コントロールパネル -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-bold text-slate-800">方程式の係数</h3>
+                        <span class="text-xs text-slate-400 math-font">a ẍ + b ẋ + c x = 0</span>
+                    </div>
+
+                    <!-- 係数 a -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="slider-a" class="text-sm font-medium text-slate-700">
+                                <span class="math-font italic font-bold text-indigo-700 text-base">a</span>
+                                <span class="text-xs text-slate-500 ml-1">（質量 m に相当）</span>
+                            </label>
+                            <input type="number" id="input-a" value="1.0" step="0.1" min="0.1" max="20"
+                                class="w-20 text-right text-sm font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                        <input type="range" id="slider-a" min="0.1" max="10" step="0.1" value="1.0" class="w-full">
+                    </div>
+
+                    <!-- 係数 b -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="slider-b" class="text-sm font-medium text-slate-700">
+                                <span class="math-font italic font-bold text-emerald-700 text-base">b</span>
+                                <span class="text-xs text-slate-500 ml-1">（抵抗係数 γ に相当）</span>
+                            </label>
+                            <input type="number" id="input-b" value="0.8" step="0.1" min="-5" max="30"
+                                class="w-20 text-right text-sm font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                        <input type="range" id="slider-b" min="-1" max="15" step="0.1" value="0.8" class="w-full">
+                    </div>
+
+                    <!-- 係数 c -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label for="slider-c" class="text-sm font-medium text-slate-700">
+                                <span class="math-font italic font-bold text-amber-700 text-base">c</span>
+                                <span class="text-xs text-slate-500 ml-1">（ばね定数 k に相当）</span>
+                            </label>
+                            <input type="number" id="input-c" value="4.0" step="0.1" min="-10" max="50"
+                                class="w-20 text-right text-sm font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        </div>
+                        <input type="range" id="slider-c" min="0" max="25" step="0.1" value="4.0" class="w-full">
+                    </div>
+
+                    <!-- 重解ピンポイント設定ボタン -->
+                    <div class="pt-1">
+                        <button id="btn-set-critical" type="button"
+                            class="w-full py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            現在の a, c でちょうど重解 (D = 0) に合わせる
+                        </button>
+                    </div>
+
+                    <!-- プリセットボタン -->
+                    <div class="pt-2 border-t border-slate-100">
+                        <p class="text-xs font-semibold text-slate-500 mb-2">代表的なパターンを試す</p>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button type="button" data-preset="underdamped"
+                                class="preset-btn py-2 px-2.5 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 border border-slate-200 text-xs font-medium text-slate-700 transition-colors text-left">
+                                <span class="font-bold text-indigo-600">(b)</span> 減衰振動
+                            </button>
+                            <button type="button" data-preset="critical"
+                                class="preset-btn py-2 px-2.5 rounded-xl bg-slate-50 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 border border-slate-200 text-xs font-medium text-slate-700 transition-colors text-left">
+                                <span class="font-bold text-amber-600">(c)</span> 重解 (臨界)
+                            </button>
+                            <button type="button" data-preset="overdamped"
+                                class="preset-btn py-2 px-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 border border-slate-200 text-xs font-medium text-slate-700 transition-colors text-left">
+                                <span class="font-bold text-emerald-600">(a)</span> 2つの実数解
+                            </button>
+                            <button type="button" data-preset="harmonic"
+                                class="preset-btn py-2 px-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 hover:text-sky-700 hover:border-sky-200 border border-slate-200 text-xs font-medium text-slate-700 transition-colors text-left">
+                                <span class="font-bold text-sky-600">(d)</span> 単振動 (b=0)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 初期条件 & 表示オプション -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm space-y-4">
+                    <h3 class="text-sm font-bold text-slate-800">初期条件・表示設定</h3>
+
+                    <!-- 初期位置 x(0) -->
+                    <div class="space-y-1">
+                        <div class="flex items-center justify-between">
+                            <label for="slider-x0" class="text-xs font-medium text-slate-700">
+                                初期位置 <span class="math-font italic font-bold text-sm">x(0)</span>
+                            </label>
+                            <input type="number" id="input-x0" value="2.0" step="0.1" min="-5" max="5"
+                                class="w-16 text-right text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                        </div>
+                        <input type="range" id="slider-x0" min="-3" max="3" step="0.1" value="2.0" class="w-full">
+                    </div>
+
+                    <!-- 初速度 v(0) -->
+                    <div class="space-y-1">
+                        <div class="flex items-center justify-between">
+                            <label for="slider-v0" class="text-xs font-medium text-slate-700">
+                                初速度 <span class="math-font italic font-bold text-sm">v(0) = dx/dt|<sub>0</sub></span>
+                            </label>
+                            <input type="number" id="input-v0" value="0.0" step="0.1" min="-10" max="10"
+                                class="w-16 text-right text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                        </div>
+                        <input type="range" id="slider-v0" min="-5" max="5" step="0.1" value="0.0" class="w-full">
+                    </div>
+
+                    <!-- 時間範囲とスケール・比較設定 -->
+                    <div class="pt-2 border-t border-slate-100 space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs font-medium text-slate-600">横軸（時間範囲）</span>
+                            <div class="inline-flex rounded-lg bg-slate-100 p-0.5">
+                                <button type="button" data-tmax="5" class="tmax-btn px-2.5 py-1 text-xs font-medium rounded-md text-slate-600 hover:text-slate-900">5s</button>
+                                <button type="button" data-tmax="10" class="tmax-btn px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-indigo-700 shadow-sm">10s</button>
+                                <button type="button" data-tmax="20" class="tmax-btn px-2.5 py-1 text-xs font-medium rounded-md text-slate-600 hover:text-slate-900">20s</button>
+                                <button type="button" data-tmax="30" class="tmax-btn px-2.5 py-1 text-xs font-medium rounded-md text-slate-600 hover:text-slate-900">30s</button>
+                            </div>
+                        </div>
+
+                        <!-- 比較用ゴースト曲線ボタン -->
+                        <div class="flex gap-2">
+                            <button id="btn-save-ghost" type="button"
+                                class="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors">
+                                今の軌跡を比較用に残す
+                            </button>
+                            <button id="btn-clear-ghost" type="button"
+                                class="hidden py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition-colors">
+                                消去
+                            </button>
+                        </div>
+
+                        <!-- 縦軸スケール固定トグル -->
+                        <label class="flex items-center justify-between cursor-pointer select-none pt-1">
+                            <span class="text-xs font-medium text-slate-600">縦軸スケールを固定して比較する</span>
+                            <input type="checkbox" id="toggle-lock-y" class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500">
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 右カラム: グラフ2枚 & 物理アニメーション -->
+            <section class="lg:col-span-8 space-y-4">
+
+                <!-- グラフ上部: 現在の解が (a)〜(d) のどれに対応するかのインジケーター -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-3 sm:p-3.5 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <span class="text-xs font-bold text-slate-600">現在の解の分類（a〜d 対応）</span>
+                        <span id="graph-top-status" class="text-xs font-bold text-indigo-700">
+                            (b) 共役複素数解・減衰振動
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div id="pill-a" class="flex items-center gap-2 px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-400 transition-all duration-200">
+                            <span class="pill-badge shrink-0 w-6 h-6 rounded-lg bg-slate-200 text-slate-500 font-bold text-xs flex items-center justify-center">(a)</span>
+                            <div class="min-w-0 leading-tight">
+                                <div class="text-xs font-bold truncate">2つの実数解</div>
+                                <div class="text-[10px] math-font opacity-80">D &gt; 0</div>
+                            </div>
+                        </div>
+                        <div id="pill-b" class="flex items-center gap-2 px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-400 transition-all duration-200">
+                            <span class="pill-badge shrink-0 w-6 h-6 rounded-lg bg-slate-200 text-slate-500 font-bold text-xs flex items-center justify-center">(b)</span>
+                            <div class="min-w-0 leading-tight">
+                                <div class="text-xs font-bold truncate">共役複素数解</div>
+                                <div class="text-[10px] math-font opacity-80">D &lt; 0, b ≠ 0</div>
+                            </div>
+                        </div>
+                        <div id="pill-c" class="flex items-center gap-2 px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-400 transition-all duration-200">
+                            <span class="pill-badge shrink-0 w-6 h-6 rounded-lg bg-slate-200 text-slate-500 font-bold text-xs flex items-center justify-center">(c)</span>
+                            <div class="min-w-0 leading-tight">
+                                <div class="text-xs font-bold truncate">重解</div>
+                                <div class="text-[10px] math-font opacity-80">D = 0</div>
+                            </div>
+                        </div>
+                        <div id="pill-d" class="flex items-center gap-2 px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-400 transition-all duration-200">
+                            <span class="pill-badge shrink-0 w-6 h-6 rounded-lg bg-slate-200 text-slate-500 font-bold text-xs flex items-center justify-center">(d)</span>
+                            <div class="min-w-0 leading-tight">
+                                <div class="text-xs font-bold truncate">単振動</div>
+                                <div class="text-[10px] math-font opacity-80">D &lt; 0, b = 0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- グラフ1: x - t グラフ -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-indigo-600"></span>
+                            <h3 class="text-sm sm:text-base font-bold text-slate-800">
+                                位置のグラフ <span class="math-font italic font-normal text-slate-600 ml-1">x(t) - t</span>
+                            </h3>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs">
+                            <span id="ghost-legend-x" class="hidden items-center gap-1.5 text-slate-400">
+                                <span class="inline-block w-4 border-t-2 border-dashed border-slate-400"></span>
+                                比較軌跡
+                            </span>
+                            <span id="readout-x" class="font-mono bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg min-w-[140px] text-center">
+                                グラフ上をなぞって確認
+                            </span>
+                        </div>
+                    </div>
+                    <div class="relative w-full h-56 sm:h-64">
+                        <canvas id="canvas-x" class="w-full h-full block rounded-xl bg-slate-50/50 border border-slate-100 cursor-crosshair"></canvas>
+                    </div>
+                </div>
+
+                <!-- グラフ2: dx/dt - t グラフ -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-rose-600"></span>
+                            <h3 class="text-sm sm:text-base font-bold text-slate-800">
+                                速度のグラフ <span class="math-font italic font-normal text-slate-600 ml-1">dx/dt - t</span>
+                            </h3>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs">
+                            <span id="ghost-legend-v" class="hidden items-center gap-1.5 text-slate-400">
+                                <span class="inline-block w-4 border-t-2 border-dashed border-slate-400"></span>
+                                比較軌跡
+                            </span>
+                            <span id="readout-v" class="font-mono bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg min-w-[140px] text-center">
+                                グラフ上をなぞって確認
+                            </span>
+                        </div>
+                    </div>
+                    <div class="relative w-full h-56 sm:h-64">
+                        <canvas id="canvas-v" class="w-full h-full block rounded-xl bg-slate-50/50 border border-slate-100 cursor-crosshair"></canvas>
+                    </div>
+                </div>
+
+                <!-- 連動する物理モデル（ばね-質点-ダンパー） -->
+                <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-800">
+                                物理モデル例（ばね・質点・ダンパー系）
+                            </h3>
+                            <p class="text-xs text-slate-500">
+                                再生またはグラフ上をなぞると、各時刻の位置・速度・働く力（復元力・粘性摩擦）が連動します
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="btn-play" type="button"
+                                class="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                                <svg id="icon-play" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                <svg id="icon-pause" class="w-3.5 h-3.5 hidden" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                                </svg>
+                                <span id="label-play">再生</span>
+                            </button>
+                            <button id="btn-reset-anim" type="button"
+                                class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors">
+                                最初へ
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 図と微分方程式・初期値の一体型コンテナ -->
+                    <div class="rounded-xl bg-slate-50 border border-slate-200 overflow-hidden">
+                        <!-- 図内ヘッダー: 運動方程式（微分方程式例）と初期値 -->
+                        <div class="px-3.5 py-2.5 bg-white/90 border-b border-slate-200 flex flex-col gap-2">
+                            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+                                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:text-sm text-slate-800">
+                                    <span class="font-bold text-slate-500 text-xs">運動方程式：</span>
+                                    <span class="math-font text-sm sm:text-base">
+                                        <i class="text-indigo-700 font-bold">m</i><span class="frac text-xs sm:text-sm"><span>d<sup>2</sup><i>x</i></span><span>d<i>t</i><sup>2</sup></span></span>
+                                        =
+                                        <span class="text-amber-700 font-semibold">−<i>kx</i></span>
+                                        +
+                                        <span class="text-emerald-700 font-semibold"><i>f</i></span>
+                                    </span>
+                                    <span class="text-xs text-slate-500 math-font">
+                                        (<span class="text-emerald-700 font-semibold"><i>f</i> = −<i>γv</i></span>)
+                                    </span>
+                                    <span class="text-slate-400">⇒</span>
+                                    <span class="math-font text-sm sm:text-base font-medium bg-slate-100 px-2 py-0.5 rounded-lg">
+                                        <i class="text-indigo-700 font-bold">m</i><span class="frac text-xs sm:text-sm"><span>d<sup>2</sup><i>x</i></span><span>d<i>t</i><sup>2</sup></span></span>
+                                        +
+                                        <i class="text-emerald-700 font-bold">γ</i><span class="frac text-xs sm:text-sm"><span>d<i>x</i></span><span>d<i>t</i></span></span>
+                                        +
+                                        <i class="text-amber-700 font-bold">k</i><i>x</i> = 0
+                                    </span>
+                                </div>
+                            </div>
+                            <!-- 係数対応 & 初期値リアルタイム表示 -->
+                            <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                <div id="model-params-readout" class="flex flex-wrap items-center gap-2 text-slate-600 font-mono">
+                                    <!-- JSで動的に更新 -->
+                                </div>
+                                <div id="model-initial-readout" class="flex flex-wrap items-center gap-2 bg-indigo-50/80 border border-indigo-100 text-indigo-900 px-2.5 py-0.5 rounded-lg font-mono">
+                                    <!-- JSで動的に更新 -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 物理モデル描画用Canvas -->
+                        <div class="relative w-full h-44 sm:h-48">
+                            <canvas id="canvas-sim" class="w-full h-full block bg-slate-50"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+        </div>
+    </main>
+
+    <!-- フッター -->
+    <footer class="mt-6 py-4 border-t border-slate-200 bg-white text-center text-xs text-slate-400">
+        2階線形微分方程式 学習用インタラクティブシミュレーター（数値積分：4次ルンゲ＝クッタ法）
+    </footer>
+
+    <script>
+        /**
+         * 2階線形同次微分方程式 a*x'' + b*x' + c*x = 0 ビジュアライザー
+         * 完全にクライアントサイドで動作し、演習問題への配慮から一般解の数式は一切表示しない。
+         */
+        (() => {
+            // --- アプリケーション状態 ---
+            const state = {
+                a: 1.0,
+                b: 0.8,
+                c: 4.0,
+                x0: 2.0,
+                v0: 0.0,
+                tMax: 10.0,
+                lockY: false,
+                lockedRangeX: 3.0,
+                lockedRangeV: 5.0,
+                // シミュレーション結果データ配列 [{t, x, v}, ...]
+                data: [],
+                // 比較用の保存データ（ゴースト曲線）
+                ghostData: null,
+                // ホバー時の時刻（nullなら非表示）
+                hoverTime: null,
+                // アニメーション状態
+                isPlaying: false,
+                animTime: 0.0,
+                lastTimestamp: null
+            };
+
+            // 数値積分の最大値クランプ（発散系でのオーバーフロー防止）
+            const MAX_ABS_VAL = 1e4;
+
+            // --- DOM要素の取得 ---
+            const els = {
+                eqDisplay: document.getElementById('equation-display'),
+                classCard: document.getElementById('classification-card'),
+                classBadge: document.getElementById('class-badge'),
+                classTitle: document.getElementById('class-title'),
+                classPhysical: document.getElementById('class-physical'),
+                classHint: document.getElementById('class-hint'),
+                discSign: document.getElementById('discriminant-sign'),
+
+                graphTopStatus: document.getElementById('graph-top-status'),
+                pills: {
+                    a: document.getElementById('pill-a'),
+                    b: document.getElementById('pill-b'),
+                    c: document.getElementById('pill-c'),
+                    d: document.getElementById('pill-d')
+                },
+
+                sliderA: document.getElementById('slider-a'),
+                inputA: document.getElementById('input-a'),
+                sliderB: document.getElementById('slider-b'),
+                inputB: document.getElementById('input-b'),
+                sliderC: document.getElementById('slider-c'),
+                inputC: document.getElementById('input-c'),
+
+                sliderX0: document.getElementById('slider-x0'),
+                inputX0: document.getElementById('input-x0'),
+                sliderV0: document.getElementById('slider-v0'),
+                inputV0: document.getElementById('input-v0'),
+
+                btnSetCritical: document.getElementById('btn-set-critical'),
+                presetBtns: document.querySelectorAll('.preset-btn'),
+                tmaxBtns: document.querySelectorAll('.tmax-btn'),
+
+                btnSaveGhost: document.getElementById('btn-save-ghost'),
+                btnClearGhost: document.getElementById('btn-clear-ghost'),
+                ghostLegendX: document.getElementById('ghost-legend-x'),
+                ghostLegendV: document.getElementById('ghost-legend-v'),
+                toggleLockY: document.getElementById('toggle-lock-y'),
+
+                readoutX: document.getElementById('readout-x'),
+                readoutV: document.getElementById('readout-v'),
+                canvasX: document.getElementById('canvas-x'),
+                canvasV: document.getElementById('canvas-v'),
+                canvasSim: document.getElementById('canvas-sim'),
+
+                btnPlay: document.getElementById('btn-play'),
+                iconPlay: document.getElementById('icon-play'),
+                iconPause: document.getElementById('icon-pause'),
+                labelPlay: document.getElementById('label-play'),
+                btnResetAnim: document.getElementById('btn-reset-anim'),
+
+                modelParamsReadout: document.getElementById('model-params-readout'),
+                modelInitialReadout: document.getElementById('model-initial-readout')
+            };
+
+            // グラフ描画エリアの余白設定
+            const PADDING = { top: 20, right: 20, bottom: 32, left: 48 };
+
+            /**
+             * 数値を表示用に整形するヘルパー
+             */
+            function formatNum(val) {
+                if (Math.abs(val) < 1e-9) return '0';
+                return Number(val.toFixed(2)).toString();
+            }
+
+            /**
+             * ヘッダーの方程式表示および物理モデル内の係数・初期値表示を更新
+             */
+            function updateEquationDisplay() {
+                const { a, b, c, x0, v0 } = state;
+
+                const bSign = b < 0 ? '−' : '+';
+                const cSign = c < 0 ? '−' : '+';
+
+                els.eqDisplay.innerHTML = `
+                    <span class="text-indigo-700 font-bold">${formatNum(a)}</span>
+                    <span class="frac text-xs sm:text-sm"><span>d<sup>2</sup><i>x</i></span><span>d<i>t</i><sup>2</sup></span></span>
+                    <span class="mx-1">${bSign}</span>
+                    <span class="text-emerald-700 font-bold">${formatNum(Math.abs(b))}</span>
+                    <span class="frac text-xs sm:text-sm"><span>d<i>x</i></span><span>d<i>t</i></span></span>
+                    <span class="mx-1">${cSign}</span>
+                    <span class="text-amber-700 font-bold">${formatNum(Math.abs(c))}</span><i>x</i>
+                    <span class="ml-1.5">= 0</span>
+                `;
+
+                els.modelParamsReadout.innerHTML = `
+                    <span>係数対応:</span>
+                    <span class="text-indigo-700 font-semibold">m = ${formatNum(a)}</span>
+                    <span class="text-slate-300">|</span>
+                    <span class="text-emerald-700 font-semibold">γ = ${formatNum(b)}</span>
+                    <span class="text-slate-300">|</span>
+                    <span class="text-amber-700 font-semibold">k = ${formatNum(c)}</span>
+                `;
+
+                els.modelInitialReadout.innerHTML = `
+                    <span class="font-semibold">初期値:</span>
+                    <span>x(0) = ${formatNum(x0)}</span>,
+                    <span>v(0) = ${formatNum(v0)}</span>
+                `;
+            }
+
+            /**
+             * 4次ルンゲ＝クッタ法（RK4）で a*x'' + b*x' + c*x = 0 を数値積分
+             * 発散や極端な係数でも安定して計算できるようサブステップ制御を行う
+             */
+            function computeSolution() {
+                const { a, b, c, x0, v0, tMax } = state;
+                const safeA = Math.abs(a) < 1e-6 ? 1e-6 : a;
+                const numPoints = 600;
+                const dtPlot = tMax / numPoints;
+
+                // 剛性（減衰率・固有角振動数）に応じてサブステップ数を決定
+                const maxRate = Math.max(Math.abs(b / safeA), Math.sqrt(Math.abs(c / safeA)), 1);
+                const subSteps = Math.max(1, Math.min(40, Math.ceil(dtPlot / Math.min(0.01, 0.4 / maxRate))));
+                const h = dtPlot / subSteps;
+
+                const accel = (x, v) => -(b * v + c * x) / safeA;
+
+                const result = [];
+                let t = 0;
+                let x = x0;
+                let v = v0;
+                let diverged = false;
+
+                result.push({ t: 0, x, v });
+
+                for (let i = 1; i <= numPoints; i++) {
+                    if (diverged) {
+                        result.push({ t: i * dtPlot, x: null, v: null });
+                        continue;
+                    }
+
+                    for (let s = 0; s < subSteps; s++) {
+                        const k1x = v;
+                        const k1v = accel(x, v);
+
+                        const k2x = v + 0.5 * h * k1v;
+                        const k2v = accel(x + 0.5 * h * k1x, v + 0.5 * h * k1v);
+
+                        const k3x = v + 0.5 * h * k2v;
+                        const k3v = accel(x + 0.5 * h * k2x, v + 0.5 * h * k2v);
+
+                        const k4x = v + h * k3v;
+                        const k4v = accel(x + h * k3x, v + h * k3v);
+
+                        x += (h / 6) * (k1x + 2 * k2x + 2 * k3x + k4x);
+                        v += (h / 6) * (k1v + 2 * k2v + 2 * k3v + k4v);
+
+                        if (!Number.isFinite(x) || !Number.isFinite(v) || Math.abs(x) > MAX_ABS_VAL || Math.abs(v) > MAX_ABS_VAL) {
+                            diverged = true;
+                            break;
+                        }
+                    }
+
+                    t = i * dtPlot;
+                    if (diverged) {
+                        result.push({ t, x: null, v: null });
+                    } else {
+                        result.push({ t, x, v });
+                    }
+                }
+
+                state.data = result;
+            }
+
+            /**
+             * 特性方程式の判別式 D = b^2 - 4ac による自動判定
+             * （演習用配慮：一般解の公式や具体的な固有値 λ は表示しない）
+             */
+            function updateClassification() {
+                const { a, b, c } = state;
+                const D = b * b - 4 * a * c;
+                // 浮動小数点誤差を吸収するためのしきい値
+                const eps = 1e-4 * Math.max(1, b * b, Math.abs(4 * a * c));
+
+                // スタイルリセット用ヘルパー（左カード）
+                const applyTheme = (borderCls, badgeBg, signBg, physTextCls) => {
+                    els.classCard.className = `bg-white rounded-2xl border-2 p-4 shadow-sm transition-colors duration-200 ${borderCls}`;
+                    els.classBadge.className = `shrink-0 w-10 h-10 rounded-xl text-white font-bold text-lg flex items-center justify-center shadow-sm ${badgeBg}`;
+                    els.discSign.className = `text-xs font-bold px-2.5 py-0.5 rounded-full math-font ${signBg}`;
+                    els.classPhysical.className = `text-sm font-medium mt-0.5 ${physTextCls}`;
+                };
+
+                // グラフ上部の (a)〜(d) インジケーターを更新するヘルパー
+                const updateTopPills = (activeKey, statusText, statusColorCls) => {
+                    const activeStyles = {
+                        a: { box: 'border-emerald-400 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-200 shadow-sm', badge: 'bg-emerald-600 text-white' },
+                        b: { box: 'border-indigo-400 bg-indigo-50 text-indigo-900 ring-2 ring-indigo-200 shadow-sm', badge: 'bg-indigo-600 text-white' },
+                        c: { box: 'border-amber-400 bg-amber-50 text-amber-900 ring-2 ring-amber-200 shadow-sm', badge: 'bg-amber-500 text-white' },
+                        d: { box: 'border-sky-400 bg-sky-50 text-sky-900 ring-2 ring-sky-200 shadow-sm', badge: 'bg-sky-500 text-white' }
+                    };
+
+                    Object.keys(els.pills).forEach((key) => {
+                        const pill = els.pills[key];
+                        const badge = pill.querySelector('.pill-badge');
+                        if (key === activeKey) {
+                            pill.className = `flex items-center gap-2 px-2.5 py-2 rounded-xl border transition-all duration-200 ${activeStyles[key].box}`;
+                            badge.className = `pill-badge shrink-0 w-6 h-6 rounded-lg font-bold text-xs flex items-center justify-center ${activeStyles[key].badge}`;
+                        } else {
+                            pill.className = 'flex items-center gap-2 px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50/70 text-slate-400 opacity-60 transition-all duration-200';
+                            badge.className = 'pill-badge shrink-0 w-6 h-6 rounded-lg bg-slate-200 text-slate-500 font-bold text-xs flex items-center justify-center';
+                        }
+                    });
+
+                    els.graphTopStatus.textContent = statusText;
+                    els.graphTopStatus.className = `text-xs font-bold ${statusColorCls}`;
+                };
+
+                if (Math.abs(D) <= eps) {
+                    // (c) D = 0 : 重解
+                    applyTheme('border-amber-300', 'bg-amber-500', 'bg-amber-100 text-amber-800', 'text-amber-700');
+                    els.classBadge.textContent = '(c)';
+                    els.discSign.textContent = 'D = 0';
+                    els.classTitle.textContent = '重解';
+
+                    let shortPhys = '臨界減衰';
+                    if (Math.abs(b) < 1e-5 && Math.abs(c) < 1e-5) {
+                        shortPhys = '自由運動';
+                        els.classPhysical.textContent = '物理的挙動：自由運動（加速度ゼロ）';
+                        els.classHint.textContent = '復元力も抵抗力も働かないため、初速度のまま等速直線運動（初速度0なら静止）を行います。';
+                    } else if (b > 0) {
+                        shortPhys = '臨界減衰';
+                        els.classPhysical.textContent = '物理的挙動：臨界減衰';
+                        els.classHint.textContent = '振動（オーバーシュート）を起こさずに、最も速く釣り合い位置へ収束する境界状態です。';
+                    } else {
+                        shortPhys = '発散（重解）';
+                        els.classPhysical.textContent = '物理的挙動：発散（負の減衰による重解）';
+                        els.classHint.textContent = '抵抗係数 b が負のため、時間とともに変位が増大（発散）します。';
+                    }
+                    updateTopPills('c', `(c) 重解・${shortPhys}`, 'text-amber-700');
+                } else if (D > eps) {
+                    // (a) D > 0 : 異なる2つの実数解
+                    applyTheme('border-emerald-300', 'bg-emerald-600', 'bg-emerald-100 text-emerald-800', 'text-emerald-700');
+                    els.classBadge.textContent = '(a)';
+                    els.discSign.textContent = 'D > 0';
+                    els.classTitle.textContent = '異なる2つの実数解';
+
+                    let shortPhys = '過減衰';
+                    if (b > 0 && c > 0) {
+                        shortPhys = '過減衰';
+                        els.classPhysical.textContent = '物理的挙動：過減衰';
+                        els.classHint.textContent = '抵抗が非常に強く、振動せずにゆっくりと釣り合い位置へ近づきます。臨界減衰と収束の速さを比べてみましょう。';
+                    } else if (b > 0 && Math.abs(c) < 1e-5) {
+                        shortPhys = '抵抗のみの減速';
+                        els.classPhysical.textContent = '物理的挙動：抵抗のみの減速運動';
+                        els.classHint.textContent = 'ばね（復元力 c）がないため、初速度がある場合は抵抗で減速してある位置で止まります。';
+                    } else {
+                        shortPhys = '非振動的発散';
+                        els.classPhysical.textContent = '物理的挙動：非振動的発散';
+                        els.classHint.textContent = '正の指数関数的な増大成分を含むため、時間とともに発散します。';
+                    }
+                    updateTopPills('a', `(a) 異なる2つの実数解・${shortPhys}`, 'text-emerald-700');
+                } else if (Math.abs(b) < 1e-5) {
+                    // (d) D < 0 かつ b = 0 : 純虚数解（単振動）
+                    applyTheme('border-sky-300', 'bg-sky-500', 'bg-sky-100 text-sky-800', 'text-sky-700');
+                    els.classBadge.textContent = '(d)';
+                    els.discSign.textContent = 'D < 0 (b = 0)';
+                    els.classTitle.textContent = '純虚数解（単振動）';
+                    els.classPhysical.textContent = '物理的挙動：単振動（非減衰振動）';
+                    els.classHint.textContent = '抵抗 b = 0 のためエネルギーが失われず、一定の振幅で永久に振動し続けます。';
+                    updateTopPills('d', '(d) 純虚数解・単振動（非減衰）', 'text-sky-700');
+                } else {
+                    // (b) D < 0 かつ b != 0 : 共役複素数解
+                    applyTheme('border-indigo-300', 'bg-indigo-600', 'bg-indigo-100 text-indigo-800', 'text-indigo-700');
+                    els.classBadge.textContent = '(b)';
+                    els.discSign.textContent = 'D < 0';
+                    els.classTitle.textContent = '共役複素数解';
+
+                    let shortPhys = '減衰振動';
+                    if (b > 0) {
+                        shortPhys = '減衰振動';
+                        els.classPhysical.textContent = '物理的挙動：減衰振動';
+                        els.classHint.textContent = '釣り合い位置を挟んで振動しながら、振幅が徐々に小さくなっていきます。';
+                    } else {
+                        shortPhys = '発散振動';
+                        els.classPhysical.textContent = '物理的挙動：発散振動（負の減衰）';
+                        els.classHint.textContent = 'b < 0 のため外部からエネルギーが供給され続け、振動しながら振幅が増大します。';
+                    }
+                    updateTopPills('b', `(b) 共役複素数解・${shortPhys}`, 'text-indigo-700');
+                }
+            }
+
+            /**
+             * 高解像度（Retina/HiDPI）対応のCanvas初期化ヘルパー
+             */
+            function setupHiDPICanvas(canvas) {
+                const rect = canvas.getBoundingClientRect();
+                const width = Math.max(1, rect.width);
+                const height = Math.max(1, rect.height);
+                const dpr = window.devicePixelRatio || 1;
+                const targetW = Math.round(width * dpr);
+                const targetH = Math.round(height * dpr);
+
+                if (canvas.width !== targetW || canvas.height !== targetH) {
+                    canvas.width = targetW;
+                    canvas.height = targetH;
+                }
+
+                const ctx = canvas.getContext('2d');
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                return { ctx, width, height };
+            }
+
+            /**
+             * 指定時刻 t における位置 x と速度 v を線形補間で取得
+             */
+            function sampleAtTime(t) {
+                const data = state.data;
+                if (!data || data.length === 0) {
+                    return { t: 0, x: state.x0, v: state.v0 };
+                }
+                const clampedT = Math.max(0, Math.min(state.tMax, t));
+                const ratio = state.tMax > 0 ? clampedT / state.tMax : 0;
+                const idxFloat = ratio * (data.length - 1);
+                const i0 = Math.floor(idxFloat);
+                const i1 = Math.min(data.length - 1, i0 + 1);
+                const frac = idxFloat - i0;
+
+                const p0 = data[i0];
+                const p1 = data[i1];
+                if (p0.x === null || p1.x === null || p0.v === null || p1.v === null) {
+                    return { t: clampedT, x: null, v: null };
+                }
+
+                return {
+                    t: clampedT,
+                    x: p0.x + (p1.x - p0.x) * frac,
+                    v: p0.v + (p1.v - p0.v) * frac
+                };
+            }
+
+            /**
+             * グラフの見やすい縦軸最大値（±yMax）を自動計算
+             */
+            function computeNiceYMax(data, ghostData, key, minDefault) {
+                let maxAbs = 0;
+
+                const scan = (arr) => {
+                    if (!arr) return;
+                    for (let i = 0; i < arr.length; i++) {
+                        const pt = arr[i];
+                        if (pt.t > state.tMax) break;
+                        const val = pt[key];
+                        if (val !== null && Number.isFinite(val)) {
+                            const absVal = Math.abs(val);
+                            if (absVal > maxAbs) maxAbs = absVal;
+                        }
+                    }
+                };
+
+                scan(data);
+                scan(ghostData);
+
+                // 発散系でも初期挙動が潰れないよう上限を制限
+                const initAbs = Math.abs(key === 'x' ? state.x0 : state.v0);
+                const cap = Math.max(50, initAbs * 3);
+                const target = Math.max(minDefault, Math.min(maxAbs * 1.15, cap));
+
+                // キリの良い目盛り値（1, 2, 2.5, 5 × 10^n）に丸める
+                const exp = Math.floor(Math.log10(target));
+                const base = Math.pow(10, exp);
+                const norm = target / base;
+
+                let niceNorm;
+                if (norm <= 1) niceNorm = 1;
+                else if (norm <= 2) niceNorm = 2;
+                else if (norm <= 2.5) niceNorm = 2.5;
+                else if (norm <= 5) niceNorm = 5;
+                else niceNorm = 10;
+
+                return niceNorm * base;
+            }
+
+            /**
+             * x(t) または dx/dt の時系列グラフを描画
+             */
+            function drawGraph(canvas, key, strokeColor, yLabel, yMax) {
+                const { ctx, width, height } = setupHiDPICanvas(canvas);
+                ctx.clearRect(0, 0, width, height);
+
+                const plotX = PADDING.left;
+                const plotY = PADDING.top;
+                const plotW = Math.max(10, width - PADDING.left - PADDING.right);
+                const plotH = Math.max(10, height - PADDING.top - PADDING.bottom);
+
+                const toX = (t) => plotX + (t / state.tMax) * plotW;
+                const toY = (val) => plotY + plotH * 0.5 - (val / yMax) * (plotH * 0.5);
+
+                // 1. グリッド線と目盛りラベル（縦軸）
+                const yTicks = [-yMax, -yMax / 2, 0, yMax / 2, yMax];
+                ctx.font = '11px Inter, sans-serif';
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+
+                yTicks.forEach((val) => {
+                    const y = toY(val);
+                    ctx.beginPath();
+                    ctx.moveTo(plotX, y);
+                    ctx.lineTo(plotX + plotW, y);
+                    ctx.strokeStyle = val === 0 ? '#94a3b8' : '#e2e8f0';
+                    ctx.lineWidth = val === 0 ? 1.4 : 1;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#64748b';
+                    const labelStr = Math.abs(val) < 1e-9 ? '0' : Number(val.toFixed(2)).toString();
+                    ctx.fillText(labelStr, plotX - 8, y);
+                });
+
+                // 2. グリッド線と目盛りラベル（横軸：時間 t）
+                const xDivisions = 5;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                for (let i = 0; i <= xDivisions; i++) {
+                    const tVal = (state.tMax / xDivisions) * i;
+                    const x = toX(tVal);
+                    ctx.beginPath();
+                    ctx.moveTo(x, plotY);
+                    ctx.lineTo(x, plotY + plotH);
+                    ctx.strokeStyle = i === 0 ? '#94a3b8' : '#e2e8f0';
+                    ctx.lineWidth = i === 0 ? 1.4 : 1;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#64748b';
+                    ctx.fillText(Number(tVal.toFixed(1)).toString(), x, plotY + plotH + 6);
+                }
+
+                // 軸タイトル
+                ctx.fillStyle = '#475569';
+                ctx.font = 'italic 600 12px "STIX Two Text", serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText(yLabel, plotX + 6, plotY + 2);
+
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText('t [s]', plotX + plotW, height - 3);
+
+                // 3. 曲線描画ヘルパー（プロット領域にクリップ）
+                const plotSeries = (series, color, lineWidth, dashed) => {
+                    if (!series || series.length === 0) return;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.rect(plotX, plotY, plotW, plotH);
+                    ctx.clip();
+
+                    ctx.beginPath();
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = lineWidth;
+                    ctx.lineJoin = 'round';
+                    ctx.lineCap = 'round';
+                    if (dashed) ctx.setLineDash([5, 5]);
+
+                    let drawing = false;
+                    for (let i = 0; i < series.length; i++) {
+                        const pt = series[i];
+                        const val = pt[key];
+                        if (val === null || !Number.isFinite(val)) {
+                            drawing = false;
+                            continue;
+                        }
+                        const px = toX(pt.t);
+                        const py = toY(val);
+                        if (!drawing) {
+                            ctx.moveTo(px, py);
+                            drawing = true;
+                        } else {
+                            ctx.lineTo(px, py);
+                        }
+                    }
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.restore();
+                };
+
+                // 比較用ゴースト曲線（破線）
+                if (state.ghostData) {
+                    plotSeries(state.ghostData, '#94a3b8', 2, true);
+                }
+
+                // 現在の解の曲線（実線）
+                plotSeries(state.data, strokeColor, 2.5, false);
+
+                // 発散している場合の注意表示
+                const hasDiverged = state.data.some((pt) => pt[key] === null || Math.abs(pt[key]) > yMax * 1.05);
+                if (hasDiverged) {
+                    ctx.fillStyle = 'rgba(225, 29, 72, 0.85)';
+                    ctx.font = '600 11px Inter, "Noto Sans JP", sans-serif';
+                    ctx.textAlign = 'right';
+                    ctx.textBaseline = 'top';
+                    ctx.fillText('※ 値が大きく表示範囲外へ発散', plotX + plotW - 4, plotY + 4);
+                }
+
+                // 4. ホバーまたはアニメーション再生時のガイド線・マーカー
+                const activeTime = state.hoverTime !== null
+                    ? state.hoverTime
+                    : (state.isPlaying || state.animTime > 0 ? state.animTime : null);
+
+                if (activeTime !== null) {
+                    const cx = toX(activeTime);
+                    ctx.beginPath();
+                    ctx.setLineDash([3, 3]);
+                    ctx.moveTo(cx, plotY);
+                    ctx.lineTo(cx, plotY + plotH);
+                    ctx.strokeStyle = '#64748b';
+                    ctx.lineWidth = 1.2;
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    const s = sampleAtTime(activeTime);
+                    const val = s[key];
+                    if (val !== null && Number.isFinite(val) && Math.abs(val) <= yMax) {
+                        const cy = toY(val);
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fill();
+                        ctx.lineWidth = 2.5;
+                        ctx.strokeStyle = strokeColor;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            /**
+             * 物理モデル（壁・ばね・ダンパー・質量ブロック・力の矢印とラベル）の描画
+             */
+            function drawSimulation(xRange) {
+                const { ctx, width, height } = setupHiDPICanvas(els.canvasSim);
+                ctx.clearRect(0, 0, width, height);
+
+                const sampleTime = state.hoverTime !== null ? state.hoverTime : state.animTime;
+                const sample = sampleAtTime(sampleTime);
+                const xVal = sample.x === null ? 0 : sample.x;
+                const vVal = sample.v === null ? 0 : sample.v;
+
+                // 働く力：ばね復元力 (-kx = -c*x)、ダンパー粘性摩擦 (f = -γv = -b*v)
+                const fSpring = -state.c * xVal;
+                const fDamper = -state.b * vVal;
+
+                const wallX = 28;
+                const floorY = height - 34;
+                const blockW = 54;
+                const blockH = 52;
+                const blockTopY = floorY - blockH - 2;
+                const centerY = blockTopY + blockH / 2;
+
+                // 釣り合い位置（x = 0）の水平中心
+                const eqX = wallX + (width - wallX - 36) * 0.54;
+                const maxTravel = Math.min(eqX - wallX - blockW * 0.8 - 28, width - eqX - blockW * 0.8 - 24);
+                const safeRange = Math.max(1, xRange);
+                const toBlockX = (val) => eqX + Math.max(-1.15, Math.min(1.15, val / safeRange)) * maxTravel;
+
+                const blockCenterX = toBlockX(xVal);
+                const blockLeftX = blockCenterX - blockW / 2;
+                const blockRightX = blockCenterX + blockW / 2;
+
+                // 1. 地面ライン
+                ctx.beginPath();
+                ctx.moveTo(wallX, floorY);
+                ctx.lineTo(width - 14, floorY);
+                ctx.strokeStyle = '#94a3b8';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // 2. 左壁とハッチング
+                ctx.beginPath();
+                ctx.moveTo(wallX, 24);
+                ctx.lineTo(wallX, floorY);
+                ctx.strokeStyle = '#475569';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.lineWidth = 1.2;
+                for (let y = 28; y < floorY; y += 8) {
+                    ctx.beginPath();
+                    ctx.moveTo(wallX, y);
+                    ctx.lineTo(wallX - 9, y + 6);
+                    ctx.stroke();
+                }
+
+                // 3. 釣り合い位置 x = 0 の破線
+                ctx.beginPath();
+                ctx.setLineDash([4, 4]);
+                ctx.moveTo(eqX, 26);
+                ctx.lineTo(eqX, floorY);
+                ctx.strokeStyle = '#94a3b8';
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.fillStyle = '#64748b';
+                ctx.font = '11px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                ctx.fillText('x = 0', eqX, floorY + 6);
+
+                // 4. 初期位置 x(0) のマーカー（床の下に三角マークとラベル）
+                const initX = toBlockX(state.x0);
+                ctx.beginPath();
+                ctx.moveTo(initX, floorY + 2);
+                ctx.lineTo(initX - 4, floorY + 9);
+                ctx.lineTo(initX + 4, floorY + 9);
+                ctx.closePath();
+                ctx.fillStyle = '#4f46e5';
+                ctx.fill();
+
+                ctx.fillStyle = '#4f46e5';
+                ctx.font = '600 10px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                // x=0 と重なる場合は少し下にずらす
+                const initLabelY = Math.abs(initX - eqX) < 34 ? floorY + 19 : floorY + 11;
+                ctx.fillText(`x(0)=${Number(state.x0.toFixed(1))}`, initX, initLabelY);
+
+                // 5. ばねの描画（c > 0 のとき表示）
+                const springY = Math.abs(state.b) > 1e-5 ? centerY - 13 : centerY;
+                if (state.c > 0) {
+                    const coils = 9;
+                    const startX = wallX + 2;
+                    const endX = Math.max(startX + 14, blockLeftX);
+                    const segW = (endX - startX) / (coils + 2);
+                    const amp = 7;
+
+                    ctx.beginPath();
+                    ctx.moveTo(startX, springY);
+                    ctx.lineTo(startX + segW, springY);
+                    for (let i = 0; i < coils; i++) {
+                        const sx = startX + segW + (i + 0.5) * segW;
+                        const sy = springY + (i % 2 === 0 ? -amp : amp);
+                        ctx.lineTo(sx, sy);
+                    }
+                    ctx.lineTo(endX - segW, springY);
+                    ctx.lineTo(endX, springY);
+                    ctx.strokeStyle = '#d97706';
+                    ctx.lineWidth = 2;
+                    ctx.lineJoin = 'round';
+                    ctx.stroke();
+
+                    // ばねのラベル（復元力 -kx）
+                    ctx.fillStyle = '#b45309';
+                    ctx.font = '600 11px Inter, "Noto Sans JP", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText('ばね (−kx)', (startX + endX) * 0.5, springY - 10);
+                }
+
+                // 6. ダンパー（粘性摩擦 f = -γv）の描画（b != 0 のとき表示）
+                const dampY = state.c > 0 ? centerY + 14 : centerY;
+                if (Math.abs(state.b) > 1e-5) {
+                    const cylStart = wallX + (eqX - wallX) * 0.25;
+                    const cylLen = Math.max(26, (eqX - wallX) * 0.34);
+                    const pistonX = Math.max(cylStart + 5, Math.min(cylStart + cylLen - 5, blockLeftX - 24));
+
+                    ctx.strokeStyle = state.b > 0 ? '#059669' : '#e11d48';
+                    ctx.lineWidth = 2;
+
+                    // 壁からシリンダー
+                    ctx.beginPath();
+                    ctx.moveTo(wallX + 2, dampY);
+                    ctx.lineTo(cylStart, dampY);
+                    ctx.stroke();
+
+                    // シリンダー外枠（コの字）
+                    ctx.beginPath();
+                    ctx.moveTo(cylStart + cylLen, dampY - 6);
+                    ctx.lineTo(cylStart, dampY - 6);
+                    ctx.lineTo(cylStart, dampY + 6);
+                    ctx.lineTo(cylStart + cylLen, dampY + 6);
+                    ctx.stroke();
+
+                    // ピストンとロッド
+                    ctx.beginPath();
+                    ctx.moveTo(pistonX, dampY - 4);
+                    ctx.lineTo(pistonX, dampY + 4);
+                    ctx.moveTo(pistonX, dampY);
+                    ctx.lineTo(Math.max(pistonX, blockLeftX), dampY);
+                    ctx.stroke();
+
+                    // ダンパーのラベル（粘性摩擦 f = -γv）
+                    ctx.fillStyle = state.b > 0 ? '#047857' : '#be123c';
+                    ctx.font = '600 11px Inter, "Noto Sans JP", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'top';
+                    ctx.fillText('ダンパー 摩擦 f = −γv', cylStart + cylLen * 0.5, dampY + 9);
+                }
+
+                // 7. 質量ブロックの描画
+                ctx.fillStyle = '#4f46e5';
+                ctx.beginPath();
+                ctx.roundRect(blockLeftX, blockTopY, blockW, blockH, 8);
+                ctx.fill();
+                ctx.strokeStyle = '#312e81';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // ブロック内ラベル（質量 m）
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'italic bold 16px "STIX Two Text", serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('m', blockCenterX, centerY - 5);
+                ctx.font = '10px Inter, sans-serif';
+                ctx.fillStyle = '#e0e7ff';
+                ctx.fillText(`(${Number(state.a.toFixed(1))})`, blockCenterX, centerY + 11);
+
+                // 8. 矢印描画用ヘルパー（速度・復元力・粘性摩擦）
+                const drawArrow = (xStart, yPos, length, color, label, labelAbove) => {
+                    if (Math.abs(length) < 8) return;
+                    const xEnd = xStart + length;
+                    const dir = Math.sign(length);
+
+                    ctx.beginPath();
+                    ctx.moveTo(xStart, yPos);
+                    ctx.lineTo(xEnd, yPos);
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 2.2;
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.moveTo(xEnd, yPos);
+                    ctx.lineTo(xEnd - dir * 7, yPos - 4);
+                    ctx.lineTo(xEnd - dir * 7, yPos + 4);
+                    ctx.closePath();
+                    ctx.fillStyle = color;
+                    ctx.fill();
+
+                    if (label) {
+                        ctx.fillStyle = color;
+                        ctx.font = 'bold 11px Inter, "Noto Sans JP", sans-serif';
+                        ctx.textAlign = dir > 0 ? 'left' : 'right';
+                        ctx.textBaseline = labelAbove ? 'bottom' : 'middle';
+                        const lx = labelAbove ? xStart + length * 0.5 : xEnd + dir * 5;
+                        const ly = labelAbove ? yPos - 5 : yPos;
+                        if (labelAbove) ctx.textAlign = 'center';
+                        ctx.fillText(label, lx, ly);
+                    }
+                };
+
+                // 力の矢印スケーリング用（視覚的に収まる最大長 68px）
+                const maxForceLen = 68;
+                const scaleForce = (fVal) => {
+                    if (Math.abs(fVal) < 0.05) return 0;
+                    return Math.sign(fVal) * Math.min(maxForceLen, 14 + Math.sqrt(Math.abs(fVal)) * 12);
+                };
+
+                if (sample.x !== null && sample.v !== null) {
+                    // 速度ベクトル v（ブロック上側・赤）
+                    if (Math.abs(vVal) > 0.05) {
+                        const vLen = Math.sign(vVal) * Math.min(64, 12 + Math.abs(vVal) * 9);
+                        drawArrow(blockCenterX, blockTopY - 13, vLen, '#e11d48', `v=${vVal.toFixed(1)}`, true);
+                    }
+
+                    // ばねの復元力ベクトル -kx（ブロック右側上部 or 左側上部・オレンジ）
+                    if (state.c > 0 && Math.abs(fSpring) > 0.05) {
+                        const sLen = scaleForce(fSpring);
+                        const startSX = sLen > 0 ? blockRightX + 2 : blockLeftX - 2;
+                        drawArrow(startSX, centerY - 13, sLen, '#d97706', '−kx', false);
+                    }
+
+                    // ダンパーの粘性摩擦ベクトル f = -γv（ブロック右側下部 or 左側下部・緑）
+                    if (Math.abs(state.b) > 1e-5 && Math.abs(fDamper) > 0.05) {
+                        const dLen = scaleForce(fDamper);
+                        const startDX = dLen > 0 ? blockRightX + 2 : blockLeftX - 2;
+                        drawArrow(startDX, centerY + 13, dLen, '#059669', 'f', false);
+                    }
+                }
+
+                // 9. 右上に現在時刻・位置・速度・各力の値を表示
+                ctx.fillStyle = '#475569';
+                ctx.font = '11px Inter, monospace';
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'top';
+                const statusText = sample.x === null
+                    ? `t = ${sample.t.toFixed(2)}s  (発散)`
+                    : `t = ${sample.t.toFixed(2)}s | x = ${sample.x.toFixed(2)} | v = ${sample.v.toFixed(2)}`;
+                ctx.fillText(statusText, width - 12, 8);
+
+                // 左上に正の向き（+x方向）の座標軸表示
+                ctx.fillStyle = '#64748b';
+                ctx.font = 'italic 600 11px "STIX Two Text", serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText('+x →', wallX + 8, 8);
+            }
+
+            /**
+             * ホバー・再生時の数値読み取り表示を更新
+             */
+            function updateReadouts() {
+                const activeTime = state.hoverTime !== null ? state.hoverTime : (state.isPlaying || state.animTime > 0 ? state.animTime : null);
+                if (activeTime === null) {
+                    els.readoutX.textContent = 'グラフ上をなぞって確認';
+                    els.readoutV.textContent = 'グラフ上をなぞって確認';
+                    return;
+                }
+                const s = sampleAtTime(activeTime);
+                if (s.x === null) {
+                    els.readoutX.textContent = `t=${s.t.toFixed(2)}s, x=発散`;
+                    els.readoutV.textContent = `t=${s.t.toFixed(2)}s, v=発散`;
+                } else {
+                    els.readoutX.textContent = `t=${s.t.toFixed(2)}s, x=${s.x.toFixed(3)}`;
+                    els.readoutV.textContent = `t=${s.t.toFixed(2)}s, dx/dt=${s.v.toFixed(3)}`;
+                }
+            }
+
+            /**
+             * 画面全体を再描画
+             */
+            function renderAll() {
+                let yMaxX, yMaxV;
+                if (state.lockY) {
+                    yMaxX = state.lockedRangeX;
+                    yMaxV = state.lockedRangeV;
+                } else {
+                    yMaxX = computeNiceYMax(state.data, state.ghostData, 'x', 3.0);
+                    yMaxV = computeNiceYMax(state.data, state.ghostData, 'v', 5.0);
+                    state.lockedRangeX = yMaxX;
+                    state.lockedRangeV = yMaxV;
+                }
+
+                drawGraph(els.canvasX, 'x', '#4f46e5', 'x(t)', yMaxX);
+                drawGraph(els.canvasV, 'v', '#e11d48', 'dx/dt', yMaxV);
+                drawSimulation(yMaxX);
+                updateReadouts();
+            }
+
+            /**
+             * パラメータ変更時のフル更新
+             */
+            function updateAll() {
+                updateEquationDisplay();
+                updateClassification();
+                computeSolution();
+                renderAll();
+            }
+
+            /**
+             * スライダーと数値入力を同期させるバインド関数
+             */
+            function bindControl(slider, input, stateKey, minAllowed) {
+                slider.addEventListener('input', () => {
+                    const val = parseFloat(slider.value);
+                    state[stateKey] = val;
+                    input.value = val;
+                    updateAll();
+                });
+
+                input.addEventListener('input', () => {
+                    let val = parseFloat(input.value);
+                    if (Number.isNaN(val)) return;
+                    if (minAllowed !== undefined && val < minAllowed) {
+                        val = minAllowed;
+                    }
+                    state[stateKey] = val;
+                    // スライダーの範囲内ならスライダーも追従
+                    const sMin = parseFloat(slider.min);
+                    const sMax = parseFloat(slider.max);
+                    slider.value = Math.max(sMin, Math.min(sMax, val));
+                    updateAll();
+                });
+
+                input.addEventListener('blur', () => {
+                    let val = parseFloat(input.value);
+                    if (Number.isNaN(val) || (minAllowed !== undefined && val < minAllowed)) {
+                        val = state[stateKey];
+                    }
+                    input.value = val;
+                });
+            }
+
+            bindControl(els.sliderA, els.inputA, 'a', 0.05);
+            bindControl(els.sliderB, els.inputB, 'b');
+            bindControl(els.sliderC, els.inputC, 'c');
+            bindControl(els.sliderX0, els.inputX0, 'x0');
+            bindControl(els.sliderV0, els.inputV0, 'v0');
+
+            /**
+             * 係数をプログラムからまとめて反映するヘルパー
+             */
+            function setParams(a, b, c) {
+                state.a = a;
+                state.b = b;
+                state.c = c;
+                els.sliderA.value = a;
+                els.inputA.value = Number(a.toFixed(3));
+                els.sliderB.value = Math.max(parseFloat(els.sliderB.min), Math.min(parseFloat(els.sliderB.max), b));
+                els.inputB.value = Number(b.toFixed(3));
+                els.sliderC.value = Math.max(parseFloat(els.sliderC.min), Math.min(parseFloat(els.sliderC.max), c));
+                els.inputC.value = Number(c.toFixed(3));
+                updateAll();
+            }
+
+            // ちょうど重解 (D = 0) に合わせるボタン
+            els.btnSetCritical.addEventListener('click', () => {
+                if (state.c < 0) {
+                    // c < 0 のときは重解を作れないので c = 4.0 に戻してから合わせる
+                    setParams(state.a, 2 * Math.sqrt(state.a * 4.0), 4.0);
+                } else {
+                    const bCrit = 2 * Math.sqrt(state.a * state.c);
+                    setParams(state.a, bCrit, state.c);
+                }
+            });
+
+            // プリセットボタン
+            const presets = {
+                underdamped: { a: 1.0, b: 0.8, c: 4.0 },
+                critical:    { a: 1.0, b: 4.0, c: 4.0 },
+                overdamped:  { a: 1.0, b: 6.0, c: 4.0 },
+                harmonic:    { a: 1.0, b: 0.0, c: 4.0 }
+            };
+
+            els.presetBtns.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const p = presets[btn.dataset.preset];
+                    if (p) setParams(p.a, p.b, p.c);
+                });
+            });
+
+            // 横軸時間範囲ボタン
+            els.tmaxBtns.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    state.tMax = parseFloat(btn.dataset.tmax);
+                    if (state.animTime > state.tMax) state.animTime = 0;
+
+                    els.tmaxBtns.forEach((b) => {
+                        b.className = 'tmax-btn px-2.5 py-1 text-xs font-medium rounded-md text-slate-600 hover:text-slate-900';
+                    });
+                    btn.className = 'tmax-btn px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-indigo-700 shadow-sm';
+                    updateAll();
+                });
+            });
+
+            // 比較用ゴースト曲線の保存・消去
+            els.btnSaveGhost.addEventListener('click', () => {
+                state.ghostData = state.data.map((pt) => ({ ...pt }));
+                els.btnClearGhost.classList.remove('hidden');
+                els.ghostLegendX.classList.remove('hidden');
+                els.ghostLegendX.classList.add('inline-flex');
+                els.ghostLegendV.classList.remove('hidden');
+                els.ghostLegendV.classList.add('inline-flex');
+                renderAll();
+            });
+
+            els.btnClearGhost.addEventListener('click', () => {
+                state.ghostData = null;
+                els.btnClearGhost.classList.add('hidden');
+                els.ghostLegendX.classList.add('hidden');
+                els.ghostLegendX.classList.remove('inline-flex');
+                els.ghostLegendV.classList.add('hidden');
+                els.ghostLegendV.classList.remove('inline-flex');
+                renderAll();
+            });
+
+            // 縦軸スケール固定トグル
+            els.toggleLockY.addEventListener('change', () => {
+                state.lockY = els.toggleLockY.checked;
+                renderAll();
+            });
+
+            // グラフ上のマウス・タッチ操作（両グラフ連動クロスヘア）
+            function attachHoverEvents(canvas) {
+                const handlePointer = (clientX) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const relX = clientX - rect.left;
+                    const plotW = rect.width - PADDING.left - PADDING.right;
+                    const ratio = (relX - PADDING.left) / plotW;
+                    if (ratio >= 0 && ratio <= 1) {
+                        state.hoverTime = ratio * state.tMax;
+                    } else {
+                        state.hoverTime = null;
+                    }
+                    renderAll();
+                };
+
+                canvas.addEventListener('mousemove', (e) => handlePointer(e.clientX));
+                canvas.addEventListener('mouseleave', () => {
+                    state.hoverTime = null;
+                    renderAll();
+                });
+                canvas.addEventListener('touchstart', (e) => {
+                    if (e.touches.length > 0) handlePointer(e.touches[0].clientX);
+                }, { passive: true });
+                canvas.addEventListener('touchmove', (e) => {
+                    if (e.touches.length > 0) handlePointer(e.touches[0].clientX);
+                }, { passive: true });
+                canvas.addEventListener('touchend', () => {
+                    state.hoverTime = null;
+                    renderAll();
+                });
+            }
+
+            attachHoverEvents(els.canvasX);
+            attachHoverEvents(els.canvasV);
+
+            // アニメーション制御
+            function updatePlayButtonUI() {
+                if (state.isPlaying) {
+                    els.iconPlay.classList.add('hidden');
+                    els.iconPause.classList.remove('hidden');
+                    els.labelPlay.textContent = '一時停止';
+                } else {
+                    els.iconPlay.classList.remove('hidden');
+                    els.iconPause.classList.add('hidden');
+                    els.labelPlay.textContent = '再生';
+                }
+            }
+
+            function animLoop(timestamp) {
+                if (!state.isPlaying) return;
+                if (state.lastTimestamp === null) {
+                    state.lastTimestamp = timestamp;
+                }
+                const dtReal = (timestamp - state.lastTimestamp) / 1000;
+                state.lastTimestamp = timestamp;
+
+                state.animTime += dtReal;
+                if (state.animTime >= state.tMax) {
+                    state.animTime = 0; // ループ再生
+                }
+
+                renderAll();
+                requestAnimationFrame(animLoop);
+            }
+
+            els.btnPlay.addEventListener('click', () => {
+                state.isPlaying = !state.isPlaying;
+                state.lastTimestamp = null;
+                updatePlayButtonUI();
+                if (state.isPlaying) {
+                    requestAnimationFrame(animLoop);
+                }
+            });
+
+            els.btnResetAnim.addEventListener('click', () => {
+                state.isPlaying = false;
+                state.animTime = 0;
+                state.lastTimestamp = null;
+                updatePlayButtonUI();
+                renderAll();
+            });
+
+            // ウィンドウリサイズ対応
+            let resizeTimer = null;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(renderAll, 60);
+            });
+
+            // 初期化実行
+            window.addEventListener('load', () => {
+                updateAll();
+            });
+            // load済みの場合へのフォールバック
+            if (document.readyState === 'complete') {
+                updateAll();
+            }
+        })();
+    </script>
+</body>
+</html>
